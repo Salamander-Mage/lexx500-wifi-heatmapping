@@ -162,17 +162,3 @@ python3 -u src/render_from_sqlite.py \
 
 # Open the report
 xdg-open output/office_run_report/report.html
-
-# ============================================================
-# Interpretation guidelines
-# ============================================================
-# Median RSSI  -> typical coverage
-# P10 RSSI     -> worst-case tendency (reliability)
-#
-# Suggested targets:
-#   Ideal      : P10 >= -70 dBm
-#   Acceptable : P10 >= -75 dBm
-#   Risky      : P10 <  -75 dBm
-#   Severe     : P10 <  -80 dBm
-# ============================================================
-
