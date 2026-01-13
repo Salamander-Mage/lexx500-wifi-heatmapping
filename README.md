@@ -22,6 +22,82 @@ For a given survey DB (`.sqlite`), the renderer outputs:
 - `report.html` — single report embedding everything above
 
 ---
+Glossary:
+
+RSSI (Received Signal Strength Indicator)
+A measurement of Wi-Fi signal strength at the client device, expressed in dBm.
+Higher (closer to 0) is better.
+
+Example: −55 dBm = strong signal
+
+Example: −80 dBm = weak signal
+
+Median RSSI (P50)
+The middle value of all measured RSSI samples.
+Half the samples are stronger, half are weaker.
+
+Good for understanding typical coverage
+
+Can hide short drops or unstable areas
+
+P10 RSSI (10th Percentile RSSI)
+The RSSI value below which 10% of samples fall.
+
+In simple terms:
+
+“In the worst ~10% of moments, the signal was this weak.”
+
+Why it matters:
+
+Captures brief drops, fades, and interference
+
+Much better indicator of reliability than averages
+
+Very important for mobile robots that cannot pause or retry easily
+
+Bad Zone
+A grid cell where the P10 RSSI falls below a defined threshold (e.g. −75 dBm) and enough samples were collected.
+
+Interpretation:
+
+Indicates areas where connectivity may be unreliable
+
+Strong evidence for AP placement or channel plan issues
+
+More meaningful than a single weak measurement
+
+Roam Event
+A detected change of Wi-Fi access point (BSSID) while remaining connected.
+
+Expected in well-designed multi-AP environments
+
+Too many → aggressive roaming
+
+None → potential “sticky client” behavior
+
+Disconnect Event
+A moment when the Wi-Fi client loses connection entirely.
+
+Usually more severe than roaming
+
+Often correlated with very low RSSI, interference, or AP issues
+
+Worst-Case Tendency
+A practical way to describe P10 behavior:
+
+“What the signal looks like when things are briefly bad.”
+
+Used instead of “average” when reliability matters more than comfort.
+
+Suggested Thresholds (Practical Guidance)
+
+P10 ≥ −70 dBm → Very reliable
+
+P10 ≥ −75 dBm → Acceptable for AMR routes
+
+P10 < −75 dBm → Risk of instability
+
+P10 < −80 dBm → High likelihood of disconnects
 
 # ============================================================
 # Lexx500 Wi-Fi Heatmapping Tool — Quick Start (Ubuntu 24.04)
