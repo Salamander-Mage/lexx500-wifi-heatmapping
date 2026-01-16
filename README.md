@@ -46,10 +46,15 @@ EXPECTED OUTPUT
 ----------------------------------------------------------------
 
 Using interface: snmp
+
 Logging to: data/klab_trial01.sqlite
+
 Sample rate: 2.0 Hz
+
 Pose source: ros1
+
 Collected 10 samples... pose=(x,y) rssi=-62
+
 Collected 20 samples...
 
 If sample count increases → system is working.
