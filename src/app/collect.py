@@ -5,7 +5,6 @@ from pathlib import Path
 
 from app.wifi_linux import detect_wifi_interface, read_wifi_status
 from app.probes import ping
-from app.pose_sources import ClickMapPoseProvider
 from app.logger_sqlite import SqliteLogger
 
 
@@ -15,18 +14,30 @@ def now_unix_ms() -> int:
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--db", default="data/run.sqlite")
-    p.add_argument("--interface", default="auto")
-    p.add_argument("--hz", type=float, default=2.0)
+
+    # Output
+    p.add_argument("--db", default="data/run.sqlite", help="Output SQLite DB path.")
+
+    # Wi-Fi source (Linux interface)
+    # - laptop: your Wi-Fi NIC (e.g., wlp9s0)
+    # - AMR NUC: usually no Wi-Fi NIC; use --interface lo for pose-only runs
+    p.add_argument("--interface", default="auto", help="Wi-Fi interface name, or 'auto'.")
+
+    # Sampling
+    p.add_argument("--hz", type=float, default=2.0, help="Sample rate (Hz).")
 
     # Pose selection
     p.add_argument("--pose_source", default="manual", choices=["manual", "ros1"])
-    p.add_argument("--pose_topic", default="/amcl_pose")
+    p.add_argument("--pose_topic", default="/amcl_pose", help="ROS1 pose topic when pose_source=ros1.")
 
-    # Manual pose entry (legacy / home walking)
-    p.add_argument("--manual_pose", action="store_true", help="Enable manual pose entry in terminal (ClickMapPoseProvider).")
+    # Manual pose entry (home/laptop workflow only)
+    p.add_argument(
+        "--manual_pose",
+        action="store_true",
+        help="Enable manual pose entry in terminal (ClickMapPoseProvider).",
+    )
 
-    # Optional probe
+    # Optional ping probe
     p.add_argument("--probe_host", default="", help="Optional ping target (e.g. gateway IP).")
     p.add_argument("--probe_count", type=int, default=3)
     p.add_argument("--probe_timeout_s", type=int, default=1)
@@ -43,8 +54,12 @@ def main():
     if iface in ("", "auto"):
         iface = detect_wifi_interface()
         if not iface:
-            # On robot NUC, there may be no Wi-Fi interface; user may switch to MOXA SNMP later.
-            raise RuntimeError("Could not auto-detect Wi-Fi interface. Use --interface wlp9s0 (etc).")
+            raise RuntimeError(
+                "Could not auto-detect a Wi-Fi interface.\n"
+                "Use --interface wlp9s0 (etc).\n"
+                "On AMR NUC (no Wi-Fi NIC), use --interface lo for pose-only runs, "
+                "then use MOXA/FXE data later for real RSSI."
+            )
 
     print(f"Using interface: {iface}")
     print(f"Logging to: {args.db}")
@@ -54,16 +69,20 @@ def main():
     # -------------------------
     # Pose provider selection
     # -------------------------
+    pose_provider = None
+
     if args.pose_source == "manual":
+        # Lazy import so ROS runs don't depend on manual provider imports
+        from app.pose_sources import ClickMapPoseProvider
+
         pose_provider = ClickMapPoseProvider()
         if args.manual_pose:
             pose_provider.start()
-        else:
-            # Not started => pose stays at (0,0,0)
-            pass
+
     else:
         # ROS1 pose provider (AMCL pose in map frame)
-        from app.pose_ros1 import Ros1AmclPoseProvider  # requires ROS env in container
+        from app.pose_ros1 import Ros1AmclPoseProvider  # requires ROS env + rospy
+
         pose_provider = Ros1AmclPoseProvider(topic=args.pose_topic)
         pose_provider.start()
         print(f"ROS1 pose topic: {args.pose_topic}")
@@ -81,7 +100,7 @@ def main():
 
     try:
         i = 0
-        period = 1.0 / args.hz
+        period = 1.0 / max(args.hz, 0.01)
 
         while True:
             # Stop support for manual mode (press 'q' in ClickMapPoseProvider)
@@ -90,13 +109,19 @@ def main():
                 break
 
             # If ROS pose provider hasn't received first message yet, warn once
-            if args.pose_source == "ros1" and hasattr(pose_provider, "has_pose") and not pose_provider.has_pose():
+            if (
+                args.pose_source == "ros1"
+                and hasattr(pose_provider, "has_pose")
+                and not pose_provider.has_pose()
+            ):
                 if not printed_waiting_pose:
                     print("Waiting for first pose message...", flush=True)
                     printed_waiting_pose = True
 
             ts_ms = now_unix_ms()
             pose = pose_provider.get_pose()
+
+            # Wi-Fi status (may be DOWN/None if interface isn't a real Wi-Fi NIC)
             wifi = read_wifi_status(iface)
 
             roam_event = 0
@@ -129,17 +154,14 @@ def main():
                 "x_m": pose.x_m,
                 "y_m": pose.y_m,
                 "theta_rad": pose.theta_rad,
-
                 "connected": 1 if wifi.connected else 0,
                 "ssid": wifi.ssid,
                 "bssid": wifi.bssid,
                 "rssi_dbm": wifi.rssi_dbm,
                 "freq_mhz": wifi.freq_mhz,
-
                 "roam_event": roam_event,
                 "disconnect_event": disconnect_event,
                 "disconnect_streak_s": disconnect_streak_s,
-
                 "ping_loss_pct": ping_loss,
                 "ping_avg_ms": ping_avg,
             }
