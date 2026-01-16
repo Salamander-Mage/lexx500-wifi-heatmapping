@@ -1,71 +1,50 @@
-Lexx500 Wi-Fi Heatmapping (Field Engineer Guide)
+# Lexx500 Wi-Fi Heatmapping — Field Engineer Quick Guide
 
-Purpose:
-Record robot position + Wi-Fi signal strength while the AMR operates, then generate a Wi-Fi coverage heatmap.
+PURPOSE
+- Collect robot pose + Wi-Fi signal strength during normal AMR operation
+- Produce Wi-Fi coverage heatmaps
+- Read-only, no ROS modification, safe to stop anytime
 
-✅ No ROS changes
-✅ Read-only pose subscription
-✅ One command to collect
-✅ Safe to stop anytime
+REQUIREMENTS (already on robot)
+- Docker
+- ROS running
+- Network access to MOXA / FXE device
 
-What This Tool Does
+----------------------------------------------------------------
+ONE-TIME SETUP (PER SITE)
+----------------------------------------------------------------
 
-While the robot is operating:
+1) Identify SNMP RSSI OID (MOXA / FXE)
 
-Reads robot pose from ROS (/amcl_pose)
-
-Reads Wi-Fi signal via SNMP (MOXA / FXE)
-
-Logs synchronized samples to SQLite
-
-Heatmap is generated offline
-
-Requirements (Already on Robot)
-
-Docker
-
-ROS already running
-
-Network access to MOXA / FXE device
-
-One-Time Setup (Per Site)
-1️⃣ Identify the SNMP RSSI OID
-
-This is the only required configuration.
-
-Example:
-
+Example (AWK-1137C):
 export SNMP_RSSI_OID=.1.3.6.1.4.1.8691.15.35.1.11.17.1.12.1.1
 
+(Optional but recommended)
+echo 'export SNMP_RSSI_OID=.1.3.6.1.4.1.8691.15.35.1.11.17.1.12.1.1' >> ~/.bashrc
 
-(Optional, recommended)
+----------------------------------------------------------------
+DATA COLLECTION (ON ROBOT)
+----------------------------------------------------------------
 
-echo 'export SNMP_RSSI_OID=...' >> ~/.bashrc
-
-Collect Wi-Fi + Pose Data
-
-From the repo root:
+From repo root:
 
 ./scripts/robot_collect_pose_snmp.sh klab_trial01
 
+What this does:
+- Runs inside existing hybrid-amr container
+- Subscribes to /amcl_pose
+- Polls SNMP RSSI
+- Writes SQLite database continuously
 
-What happens:
-
-Starts Docker
-
-Connects to ROS
-
-Polls SNMP
-
-Writes to:
-
+Output file:
 data/klab_trial01.sqlite
 
+Stop anytime with Ctrl+C (data is preserved).
 
-Stop anytime with Ctrl+C
-✔ Data is saved continuously
+----------------------------------------------------------------
+EXPECTED OUTPUT
+----------------------------------------------------------------
 
-Expected Console Output
 Using interface: snmp
 Logging to: data/klab_trial01.sqlite
 Sample rate: 2.0 Hz
@@ -73,56 +52,74 @@ Pose source: ros1
 Collected 10 samples... pose=(x,y) rssi=-62
 Collected 20 samples...
 
+If sample count increases → system is working.
 
-If you see samples increasing → it’s working.
+----------------------------------------------------------------
+HEATMAP GENERATION (OFFLINE OR ON ROBOT)
+----------------------------------------------------------------
 
-Generate the Heatmap (After Collection)
 python3 src/render_from_sqlite.py \
   --db data/klab_trial01.sqlite \
   --out_dir output/klab_trial01
 
-
 Results saved to:
-
 output/klab_trial01/
 
-Common Checks (If Something Fails)
-Pose not updating?
+----------------------------------------------------------------
+SANITY CHECK COMMANDS
+----------------------------------------------------------------
+
+Check pose:
 rostopic echo /amcl_pose
 
-SNMP reachable?
+Check SNMP connectivity:
 snmpget -v2c -c public <MOXA_IP> sysDescr.0
 
-RSSI always None?
+Check RSSI OID manually:
+snmpget -v2c -c public <MOXA_IP> $SNMP_RSSI_OID
 
-Check SNMP_RSSI_OID
+----------------------------------------------------------------
+COMMON ISSUES
+----------------------------------------------------------------
 
-Confirm device firmware matches expected OID
+RSSI always None:
+- Verify SNMP_RSSI_OID
+- Confirm MOXA firmware matches OID
 
-What NOT to Do
+Pose frozen:
+- Robot not moving OR localization paused
+- /amcl_pose publisher down
 
-❌ Do not modify ROS launch files
-❌ Do not add ROS nodes
-❌ Do not install Python packages on host
+Script fails immediately:
+- ROS not running
+- Container not healthy
 
-This tool is read-only and external by design.
+----------------------------------------------------------------
+DO NOT DO
+----------------------------------------------------------------
 
-Engineer Checklist
+- Do NOT modify ROS launch files
+- Do NOT install Python packages on host
+- Do NOT add ROS nodes
 
- /amcl_pose exists
+This tool is read-only by design.
 
- SNMP device reachable
+----------------------------------------------------------------
+FILES YOU CARE ABOUT
+----------------------------------------------------------------
 
- SNMP_RSSI_OID set
+scripts/robot_collect_pose_snmp.sh
+src/app/collect.py
+src/app/wifi_snmp.py
+data/*.sqlite
+output/*/
 
- Script runs
+----------------------------------------------------------------
+ENGINEER CHECKLIST
+----------------------------------------------------------------
 
- SQLite file created
-
-Files You Care About
-
-scripts/robot_collect_pose_snmp.sh → run this
-
-data/*.sqlite → raw samples
-
-output/*/ → heatmaps
+[ ] /amcl_pose publishing
+[ ] SNMP reachable
+[ ] SNMP_RSSI_OID set
+[ ] SQLite file created
+[ ] Samples increasing
