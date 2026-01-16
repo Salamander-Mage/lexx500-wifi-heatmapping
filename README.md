@@ -109,9 +109,13 @@ FILES YOU CARE ABOUT
 ----------------------------------------------------------------
 
 scripts/robot_collect_pose_snmp.sh
+
 src/app/collect.py
+
 src/app/wifi_snmp.py
+
 data/*.sqlite
+
 output/*/
 
 ----------------------------------------------------------------
@@ -119,7 +123,11 @@ ENGINEER CHECKLIST
 ----------------------------------------------------------------
 
 [ ] /amcl_pose publishing
+
 [ ] SNMP reachable
+
 [ ] SNMP_RSSI_OID set
+
 [ ] SQLite file created
+
 [ ] Samples increasing
