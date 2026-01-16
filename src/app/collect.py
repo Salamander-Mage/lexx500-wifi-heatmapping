@@ -1,12 +1,12 @@
-# src/app/collect.py
+#!/usr/bin/env python3
 import argparse
 import time
 from pathlib import Path
 
 from app.wifi_linux import detect_wifi_interface, read_wifi_status
 from app.probes import ping
-from app.logger_sqlite import SqliteLogger
 from app.pose_sources import ClickMapPoseProvider
+from app.logger_sqlite import SqliteLogger
 
 
 def now_unix_ms() -> int:
@@ -19,27 +19,31 @@ def main():
     p.add_argument("--interface", default="auto")
     p.add_argument("--hz", type=float, default=2.0)
 
-    # Pose source selection
-    p.add_argument("--pose_source", choices=["click", "ros_tf"], default="click")
-    p.add_argument("--ros_map_frame", default="map")
-    p.add_argument("--ros_base_frame", default="base_link")
-    p.add_argument("--ros_odom_frame", default="odom")
-    p.add_argument("--ros_tf_timeout_s", type=float, default=0.25)
+    # Pose selection
+    p.add_argument("--pose_source", default="manual", choices=["manual", "ros1"])
+    p.add_argument("--pose_topic", default="/amcl_pose")
 
-    # Optional ping probe
+    # Manual pose entry (legacy / home walking)
+    p.add_argument("--manual_pose", action="store_true", help="Enable manual pose entry in terminal (ClickMapPoseProvider).")
+
+    # Optional probe
     p.add_argument("--probe_host", default="", help="Optional ping target (e.g. gateway IP).")
     p.add_argument("--probe_count", type=int, default=3)
     p.add_argument("--probe_timeout_s", type=int, default=1)
 
-    # DB commit behavior
+    # DB batching
     p.add_argument("--commit_every", type=int, default=10)
 
     args = p.parse_args()
 
+    # -------------------------
+    # Wi-Fi interface detection
+    # -------------------------
     iface = args.interface
     if iface in ("", "auto"):
         iface = detect_wifi_interface()
         if not iface:
+            # On robot NUC, there may be no Wi-Fi interface; user may switch to MOXA SNMP later.
             raise RuntimeError("Could not auto-detect Wi-Fi interface. Use --interface wlp9s0 (etc).")
 
     print(f"Using interface: {iface}")
@@ -47,57 +51,52 @@ def main():
     print(f"Sample rate: {args.hz} Hz")
     print(f"Pose source: {args.pose_source}")
 
-    # Pose provider init
-    pose_provider = None
-    ros_pose = None
-
-    if args.pose_source == "click":
+    # -------------------------
+    # Pose provider selection
+    # -------------------------
+    if args.pose_source == "manual":
         pose_provider = ClickMapPoseProvider()
-        pose_provider.start()
-        print("Click pose mode: use the click-map window. Press 'q' to stop.")
+        if args.manual_pose:
+            pose_provider.start()
+        else:
+            # Not started => pose stays at (0,0,0)
+            pass
     else:
-        from app.pose_ros_tf import RosTfPoseProvider
+        # ROS1 pose provider (AMCL pose in map frame)
+        from app.pose_ros1 import Ros1AmclPoseProvider  # requires ROS env in container
+        pose_provider = Ros1AmclPoseProvider(topic=args.pose_topic)
+        pose_provider.start()
+        print(f"ROS1 pose topic: {args.pose_topic}")
 
-        ros_pose = RosTfPoseProvider(
-            map_frame=args.ros_map_frame,
-            base_frame=args.ros_base_frame,
-            odom_frame=args.ros_odom_frame,
-            timeout_s=args.ros_tf_timeout_s,
-            allow_fallback_odom=True,
-        )
-        ros_pose.start()
-        print(f"ROS TF mode: using TF {args.ros_map_frame}->{args.ros_base_frame} (fallback {args.ros_odom_frame}->{args.ros_base_frame})")
-
+    # -------------------------
+    # Logger setup
+    # -------------------------
     log = SqliteLogger(Path(args.db))
     log.open()
 
     prev_bssid = None
     disconnected_since = None
     last_commit = 0
-
-    period = 1.0 / args.hz
-    i = 0
+    printed_waiting_pose = False
 
     try:
+        i = 0
+        period = 1.0 / args.hz
+
         while True:
-            # Stop condition depending on pose source
-            if args.pose_source == "click":
-                if pose_provider.should_stop():
-                    print("Stopping (manual 'q').")
-                    break
-            else:
-                if not ros_pose.ok():
-                    print("Stopping (ROS shutdown).")
-                    break
+            # Stop support for manual mode (press 'q' in ClickMapPoseProvider)
+            if hasattr(pose_provider, "should_stop") and pose_provider.should_stop():
+                print("Stopping (manual 'q').")
+                break
+
+            # If ROS pose provider hasn't received first message yet, warn once
+            if args.pose_source == "ros1" and hasattr(pose_provider, "has_pose") and not pose_provider.has_pose():
+                if not printed_waiting_pose:
+                    print("Waiting for first pose message...", flush=True)
+                    printed_waiting_pose = True
 
             ts_ms = now_unix_ms()
-
-            # Pose read
-            if args.pose_source == "click":
-                pose = pose_provider.get_pose()
-            else:
-                pose = ros_pose.get_pose()
-
+            pose = pose_provider.get_pose()
             wifi = read_wifi_status(iface)
 
             roam_event = 0
@@ -151,7 +150,13 @@ def main():
             if i % args.commit_every == 0:
                 log.commit()
                 last_commit = i
-                print(f"Collected {i} samples... pose=({pose.x_m:.2f},{pose.y_m:.2f}) wifi={'ok' if wifi.connected else 'DOWN'} rssi={wifi.rssi_dbm}")
+                print(
+                    f"Collected {i} samples... "
+                    f"pose=({pose.x_m:.2f},{pose.y_m:.2f}) "
+                    f"wifi={'ok' if wifi.connected else 'DOWN'} "
+                    f"rssi={wifi.rssi_dbm}",
+                    flush=True,
+                )
 
             time.sleep(period)
 
