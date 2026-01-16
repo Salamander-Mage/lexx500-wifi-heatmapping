@@ -1,164 +1,128 @@
-# Lexx500 Wi-Fi Heatmapping Tool
+Lexx500 Wi-Fi Heatmapping (Field Engineer Guide)
 
-Wi-Fi survey + heatmapping tool for Lexx500 AMRs.  
-Generates an HTML report with RSSI heatmaps (median + P10), bad-zone overlay, path overlay, and basic stability plots.
+Purpose:
+Record robot position + Wi-Fi signal strength while the AMR operates, then generate a Wi-Fi coverage heatmap.
 
-Supports workflows for:
-- **Laptop walk survey** (quick baseline)
-- **Robot NUC survey (SSH)** (best for V6 MOXA vs V7 FXE-5000 comparisons)
+✅ No ROS changes
+✅ Read-only pose subscription
+✅ One command to collect
+✅ Safe to stop anytime
 
----
+What This Tool Does
 
-## What this produces
+While the robot is operating:
 
-For a given survey DB (`.sqlite`), the renderer outputs:
+Reads robot pose from ROS (/amcl_pose)
 
-- `rssi_median.png` — typical signal level per cell
-- `rssi_p10.png` — worst-case tendency per cell (10th percentile)
-- `bad_zones.png` — cells where P10 is below a threshold (e.g. -75 dBm)
-- `path_overlay.png` — route/path with roam + disconnect markers
-- `rssi_over_time.png` — signal over time
-- `rssi_hist.png` — RSSI distribution
-- `report.html` — single report embedding everything above
+Reads Wi-Fi signal via SNMP (MOXA / FXE)
 
----
-Glossary:
+Logs synchronized samples to SQLite
 
-RSSI (Received Signal Strength Indicator)
-A measurement of Wi-Fi signal strength at the client device, expressed in dBm.
-Higher (closer to 0) is better.
+Heatmap is generated offline
 
-Example: −55 dBm = strong signal
+Requirements (Already on Robot)
 
-Example: −80 dBm = weak signal
+Docker
 
-Median RSSI (P50)
-The middle value of all measured RSSI samples.
-Half the samples are stronger, half are weaker.
+ROS already running
 
-Good for understanding typical coverage
+Network access to MOXA / FXE device
 
-Can hide short drops or unstable areas
+One-Time Setup (Per Site)
+1️⃣ Identify the SNMP RSSI OID
 
-P10 RSSI (10th Percentile RSSI)
-The RSSI value below which 10% of samples fall.
+This is the only required configuration.
 
-In simple terms:
+Example:
 
-“In the worst ~10% of moments, the signal was this weak.”
+export SNMP_RSSI_OID=.1.3.6.1.4.1.8691.15.35.1.11.17.1.12.1.1
 
-Why it matters:
 
-Captures brief drops, fades, and interference
+(Optional, recommended)
 
-Much better indicator of reliability than averages
+echo 'export SNMP_RSSI_OID=...' >> ~/.bashrc
 
-Very important for mobile robots that cannot pause or retry easily
+Collect Wi-Fi + Pose Data
 
-Bad Zone
-A grid cell where the P10 RSSI falls below a defined threshold (e.g. −75 dBm) and enough samples were collected.
+From the repo root:
 
-Interpretation:
+./scripts/robot_collect_pose_snmp.sh klab_trial01
 
-Indicates areas where connectivity may be unreliable
 
-Strong evidence for AP placement or channel plan issues
+What happens:
 
-More meaningful than a single weak measurement
+Starts Docker
 
-Roam Event
-A detected change of Wi-Fi access point (BSSID) while remaining connected.
+Connects to ROS
 
-Expected in well-designed multi-AP environments
+Polls SNMP
 
-Too many → aggressive roaming
+Writes to:
 
-None → potential “sticky client” behavior
+data/klab_trial01.sqlite
 
-Disconnect Event
-A moment when the Wi-Fi client loses connection entirely.
 
-Usually more severe than roaming
+Stop anytime with Ctrl+C
+✔ Data is saved continuously
 
-Often correlated with very low RSSI, interference, or AP issues
+Expected Console Output
+Using interface: snmp
+Logging to: data/klab_trial01.sqlite
+Sample rate: 2.0 Hz
+Pose source: ros1
+Collected 10 samples... pose=(x,y) rssi=-62
+Collected 20 samples...
 
-Worst-Case Tendency
-A practical way to describe P10 behavior:
 
-“What the signal looks like when things are briefly bad.”
+If you see samples increasing → it’s working.
 
-Used instead of “average” when reliability matters more than comfort.
+Generate the Heatmap (After Collection)
+python3 src/render_from_sqlite.py \
+  --db data/klab_trial01.sqlite \
+  --out_dir output/klab_trial01
 
-Suggested Thresholds (Practical Guidance)
 
-P10 ≥ −70 dBm → Very reliable
+Results saved to:
 
-P10 ≥ −75 dBm → Acceptable for AMR routes
+output/klab_trial01/
 
-P10 < −75 dBm → Risk of instability
+Common Checks (If Something Fails)
+Pose not updating?
+rostopic echo /amcl_pose
 
-P10 < −80 dBm → High likelihood of disconnects
+SNMP reachable?
+snmpget -v2c -c public <MOXA_IP> sysDescr.0
 
-# ============================================================
-# Lexx500 Wi-Fi Heatmapping Tool — Quick Start (Ubuntu 24.04)
-# ============================================================
+RSSI always None?
 
-# --- 1) Create and activate virtual environment ---
-python3 -m venv .venv
-source .venv/bin/activate
+Check SNMP_RSSI_OID
 
-# --- 2) Install dependencies ---
-python3 -m pip install --upgrade pip
-python3 -m pip install pandas numpy matplotlib pillow
+Confirm device firmware matches expected OID
 
-# (Optional) Freeze dependencies
-pip freeze > requirements.txt
+What NOT to Do
 
-# --- 3) Sanity check ---
-python3 -m py_compile src/render_from_sqlite.py
+❌ Do not modify ROS launch files
+❌ Do not add ROS nodes
+❌ Do not install Python packages on host
 
-# ============================================================
-# 4) Collect Wi-Fi survey data
-# ============================================================
+This tool is read-only and external by design.
 
-# A) Laptop walk survey (baseline)
-# Replace wlp9s0 with your Wi-Fi interface:
-#   ip -br a | grep -E 'wl|wlp'
-python3 -m src.app.collect \
-  --db data/office_run.sqlite \
-  --interface wlp9s0 \
-  --hz 2
+Engineer Checklist
 
-# ============================================================
-# B) Robot AMR survey (recommended)
-# ============================================================
+ /amcl_pose exists
 
-# SSH into the AMR
-ssh <user>@<AMR_ip>
+ SNMP device reachable
 
-# Verify Wi-Fi interface and ROS
-ip -br a | grep -E 'wl|wlp'
-rosnode list
+ SNMP_RSSI_OID set
 
-# Run collector on the AMR
-python3 -m src.app.collect \
-  --db /tmp/klab_v6_moxa_run01.sqlite \
-  --interface <robot_wifi_iface> \
-  --hz 2
+ Script runs
 
-# Copy database back to laptop
-scp <user>@<AMR_ip>:/tmp/klab_v6_moxa_run01.sqlite data/
+ SQLite file created
 
-# ============================================================
-# 5) Render heatmaps + HTML report
-# ============================================================
+Files You Care About
 
-python3 -u src/render_from_sqlite.py \
-  --db data/office_run.sqlite \
-  --out_dir output/office_run_report \
-  --cell_m 0.75 \
-  --min_samples 2 \
-  --bad_p10_threshold -75
+scripts/robot_collect_pose_snmp.sh → run this
 
-# Open the report
-xdg-open output/office_run_report/report.html
+data/*.sqlite → raw samples
+
+output/*/ → heatmaps
