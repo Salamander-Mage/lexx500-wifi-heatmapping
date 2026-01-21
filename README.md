@@ -44,26 +44,77 @@ Uses:
 - Laptop Wi-Fi interface
 - No ROS required
 
-From laptop:
+What this mode does:
+  You walk with a laptop and manually enter the pose points (x y yaw) while the tool logs:
+  - your entered pose
+  - Wi-Fi info from the laptop's Wi-Fi interface (RSSI, link state, etc.)
+  - optional ping probe (if enabled)
 
-python3 -m src.app.collect \
-  --db data/laptop_walk01.sqlite \
-  --hz 2 \
-  --pose_source click \
-  --interface wlp0s20f3
+  It outputs:
 
-Notes:
-- Click on map to approximate position
-- Results are qualitative, not robot-accurate
+  - data/<run>.sqlite (raw log)
+  - out/<run>.html/report.html (heatmap report)
 
-----------------------------------------------------------------
-HEATMAP GENERATION (ANY MACHINE)
-----------------------------------------------------------------
+Prerequisites:
+- linux laptop
+- python 3 installed
+- docker installed
+- sqlite3 installed
 
-python3 src/render_from_sqlite.py \
-  --db data/klab_trial01.sqlite \
-  --out_dir output/klab_trial01
+1. Clone repo
+     git clone <YOUR_GITHUB_REPO_URL>
+     cd lexx500-wifi-heatmapping
+     mkdir -p data out (create output folders)
 
+2. Quick sanity check
+
+   PYTHONPATH="$PWD/src" python3 -c "import app; print('✅ app import OK')"
+
+4. Start manual walk
+
+   PYTHONPATH="$PWD/src" python3 -m app.collect \
+        --db data/laptop_walk.sqlite \
+        --hz 1 \
+        --pose_source manual \
+        --manual_pose \
+        --commit_every 1
+
+   You should see a prompt like
+   Enter pose: x y yaw...
+
+5. Enter poses while you walk
+
+   x y yaw
+   0 0 0
+   1.0 0 0
+   1.0 1.0 90
+   2.0 1.0 90
+   End the run with Ctrl+C
+
+6. Verify the SQLite database has data
+
+   sqlite3 data/laptop_walk.sqlite '.tables'
+   sqlite3 data/laptop_walk.sqlite 'select count(*) from samples;'
+   sqlite3 data/laptop_walk.sqlite 'select * from samples limit 3;'
+
+7. Render the HTML report (recommended via Docker)
+
+   docker run --rm -it \
+  -v "$PWD:/workspace" \
+  -w /workspace \
+  python:3.10-slim \
+  bash -lc '
+    set -e
+    pip install --no-cache-dir numpy pandas matplotlib
+    python src/render_from_sqlite.py \
+      --db data/laptop_walk.sqlite \
+      --out out/laptop_walk.html
+  '
+
+8. Open the report
+   sudo chown -R "$USER:$USER" out
+   xdg-open out/laptop_walk.html/report.html
+ 
 
 ================================================================
 HOW TO READ THE HTML REPORT
