@@ -15,28 +15,85 @@ Uses:
 - Production-accurate results
 
 ----------------------------------------------------------------
-ONE-TIME SETUP (PER SITE)
+Wi-Fi RSSI via SNMP (Hardware-Dependent)
 ----------------------------------------------------------------
+IMPORTANT: SNMP OIDs for Wi-Fi metrics (RSSI, SSID, BSSID, noise, etc.) are vendor- and model-specific. Do NOT assume the same OIDs work across different access points or industrial routers.
 
-export SNMP_RSSI_OID=.1.3.6.1.4.1.8691.15.35.1.11.17.1.12.1.1
+Known-good example (MOXA AWK-1137C only):
+The following OIDs were confirmed via live snmpwalk/snmpget on a MOXA AWK-1137C during development. These are provided as an example and may NOT apply to other hardware (including FXE-5000).
 
-(Optional)
+On a fresh clone export the following at the directory of the app:
 
-echo 'export SNMP_RSSI_OID=.1.3.6.1.4.1.8691.15.35.1.11.17.1.12.1.1' >> ~/.bashrc
+export SNMP_RSSI_OID=.1.3.6.1.4.1.8691.15.35.1.11.17.1.4.1.1
+export SNMP_SSID_OID=.1.3.6.1.4.1.8691.15.35.1.11.17.1.6.1.1
+export SNMP_BSSID_OID=.1.3.6.1.4.1.8691.15.35.1.11.17.1.3.1.1
+
+If using any device other than MOXA AWK-1137C, you MUST discover the correct OIDs manually.
+
+Step 1: Identify the device vendor
+snmpget -v2c -c public <DEVICE_IP> sysObjectID.0
+snmpget -v2c -c public <DEVICE_IP> sysDescr.0
+
+Step 2: Dump the vendor enterprise tree
+snmpwalk -On -v2c -c public <DEVICE_IP> 1.3.6.1.4.1 > /tmp/snmp_full.txt
+
+Step 3: Search for Wi-Fi-related fields
+RSSI-like values (typically -40 to -90 dBm):
+grep -E 'STRING: "-[4-9][0-9]"' /tmp/snmp_full.txt | head -n 20
+SSID candidates:
+grep -i ssid /tmp/snmp_full.txt
+BSSID / MAC address candidates:
+grep -E '([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}' /tmp/snmp_full.txt
+
+Step 4: Validate the candidate RSSI OID
+snmpget -v2c -c public <DEVICE_IP> <CANDIDATE_OID>
+Move the robot or change distance to the access point and confirm the value changes realistically. Only after validation should the OID be used as SNMP_RSSI_OID.
+
+Notes:
+- Some devices expose noise floor, SNR, or TX power instead of RSSI
+- Using the wrong OID can silently produce misleading heatmaps
+- This tool assumes RSSI values are in dBm (negative integers)
 
 ----------------------------------------------------------------
 COLLECT DATA (ON ROBOT)
 ----------------------------------------------------------------
+At the directory root run the following:
 
-./scripts/robot_collect_pose_snmp.sh klab_trial01
+First make the script executable:
+
+chmod +x scripts/robot_collect_pose_snmp.sh
+
+./scripts/robot_collect_pose_snmp.sh data/amr_run01.sqlite
 
 Output:
 data/klab_trial01.sqlite
 
-Stop anytime with Ctrl+C.
+Stop scanning anytime with Ctrl+C.
+
+Render this sqlite into a HTML report on the AMR:
+
+docker run --rm -it \
+  -v "$PWD:/workspace" \
+  -w /workspace \
+  python:3.10-slim \
+  bash -lc '
+    pip install --no-cache-dir numpy pandas matplotlib >/dev/null
+    python src/render_from_sqlite.py \
+      --db data/amr_run01.sqlite \
+      --out out/amr_run01.html
+  '
+
+
+From your laptop run the following example:
+
+scp -r \
+  lexxauto@192.168.0.117:~/Tools/lexx500-wifi-heatmapping/out/amr_run01.html \
+  ~/Desktop/
+
+xdg-open ~/Desktop/amr_run01.html/report.html
 
 ----------------------------------------------------------------
-OPTIONAL: LAPTOP WALK SURVEY (BASELINE / DEBUG)
+LAPTOP WALK SURVEY (BASELINE / DEBUG)
 ----------------------------------------------------------------
 
 Uses:
@@ -70,7 +127,7 @@ Prerequisites:
 
    PYTHONPATH="$PWD/src" python3 -c "import app; print('✅ app import OK')"
 
-4. Start manual walk
+3. Start manual walk
 
    PYTHONPATH="$PWD/src" python3 -m app.collect \
         --db data/laptop_walk.sqlite \
@@ -82,7 +139,7 @@ Prerequisites:
    You should see a prompt like
    Enter pose: x y yaw...
 
-5. Enter poses while you walk
+4. Enter poses while you walk
 
    x y yaw
    0 0 0
@@ -91,13 +148,13 @@ Prerequisites:
    2.0 1.0 90
    End the run with Ctrl+C
 
-6. Verify the SQLite database has data
+5. Verify the SQLite database has data
 
    sqlite3 data/laptop_walk.sqlite '.tables'
    sqlite3 data/laptop_walk.sqlite 'select count(*) from samples;'
    sqlite3 data/laptop_walk.sqlite 'select * from samples limit 3;'
 
-7. Render the HTML report (recommended via Docker)
+6. Render the HTML report (recommended via Docker)
 
    docker run --rm -it \
   -v "$PWD:/workspace" \
@@ -111,7 +168,7 @@ Prerequisites:
       --out out/laptop_walk.html
   '
 
-8. Open the report
+1. Open the report
    sudo chown -R "$USER:$USER" out
    xdg-open out/laptop_walk.html/report.html
  
@@ -285,20 +342,6 @@ RSSI None:
 Pose frozen:
 - Robot not moving
 - Localization paused
-
-----------------------------------------------------------------
-FILES YOU CARE ABOUT
-----------------------------------------------------------------
-
-scripts/robot_collect_pose_snmp.sh
-
-src/app/collect.py
-
-src/app/wifi_snmp.py
-
-data/*.sqlite
-
-output/*/
 
 ----------------------------------------------------------------
 DO NOT DO
