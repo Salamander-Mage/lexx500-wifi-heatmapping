@@ -161,7 +161,7 @@ Prerequisites:
       --out out/laptop_walk.html
   '
 
-1. Open the report
+7. Open the report
    sudo chown -R "$USER:$USER" out
    xdg-open out/laptop_walk.html/report.html
  
@@ -261,7 +261,7 @@ What it shows:
   - Explaining why issues only happen on certain paths
 
 ---------------------
-1) rssi_over_time.png
+5) rssi_over_time.png
 ---------------------
 Question it answers:
 - "Is the signal stable over time?"
@@ -275,7 +275,7 @@ Useful for:
 - Correlating with logs
 
 ----------------
-1) rssi_hist.png
+6) rssi_hist.png
 ----------------
 Question it answers:
 - "How consistent is the signal overall?"
