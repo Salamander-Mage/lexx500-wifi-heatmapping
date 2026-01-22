@@ -63,25 +63,33 @@ data/amr_run01.sqlite
 
 Stop scanning anytime with Ctrl+C.
 
+
 Render this sqlite into a HTML report on the AMR:
+
+mkdir -p out
 
 docker run --rm -it \
   -v "$PWD:/workspace" \
   -w /workspace \
   python:3.10-slim \
   bash -lc '
+    set -e
     pip install --no-cache-dir numpy pandas matplotlib >/dev/null
     python src/render_from_sqlite.py \
       --db data/amr_run01.sqlite \
       --out out/amr_run01.html
   '
 
+ls -lah out/amr_run01.html
+ls -lah out/amr_run01.html/report.html
+
+sudo chown -R "$USER:$USER" out/amr_run01.html
+
+
 
 From your laptop run the following example:
 
-scp -r \
-  lexxauto@192.168.0.117:~/Tools/lexx500-wifi-heatmapping/out/amr_run01.html \
-  ~/Desktop/
+scp -r lexxauto@192.168.0.117:~/Tools/lexx500-wifi-heatmapping/out/amr_run01.html ~/Desktop/
 
 xdg-open ~/Desktop/amr_run01.html/report.html
 
@@ -163,7 +171,7 @@ Prerequisites:
       --out out/laptop_walk.html
   '
 
-7. Open the report
+1. Open the report
    sudo chown -R "$USER:$USER" out
    xdg-open out/laptop_walk.html/report.html
  
