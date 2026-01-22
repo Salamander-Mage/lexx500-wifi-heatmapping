@@ -19,35 +19,24 @@ Wi-Fi RSSI via SNMP (Hardware-Dependent)
 ----------------------------------------------------------------
 IMPORTANT: SNMP OIDs for Wi-Fi metrics (RSSI, SSID, BSSID, noise, etc.) are vendor- and model-specific. Do NOT assume the same OIDs work across different access points or industrial routers.
 
-Known-good example (MOXA AWK-1137C only):
-The following OIDs were confirmed via live snmpwalk/snmpget on a MOXA AWK-1137C during development. These are provided as an example and may NOT apply to other hardware (including FXE-5000).
 
-On a fresh clone export the following at the directory of the app:
+On a fresh clone export the following at the root directory of the app for applicable hardware:
 
-export SNMP_RSSI_OID=.1.3.6.1.4.1.8691.15.35.1.11.17.1.4.1.1
-export SNMP_SSID_OID=.1.3.6.1.4.1.8691.15.35.1.11.17.1.6.1.1
-export SNMP_BSSID_OID=.1.3.6.1.4.1.8691.15.35.1.11.17.1.3.1.1
+export SNMP_HOST= #use default moxa or fxe-5000 ip address
+export SNMP_COMMUNITY=public
 
-If using any device other than MOXA AWK-1137C, you MUST discover the correct OIDs manually.
+# RSSI (dBm)
+export SNMP_RSSI_OID=.1.3.6.1.4.1.672.69.3.3.2.1.9.0 #FXE5000
+export SNMP_RSSI_OID=.1.3.6.1.4.1.8691.15.35.1.11.17.1.4.1.1  #MOXA
 
-Step 1: Identify the device vendor
-snmpget -v2c -c public <DEVICE_IP> sysObjectID.0
-snmpget -v2c -c public <DEVICE_IP> sysDescr.0
+# SSID
+export SNMP_SSID_OID=.1.3.6.1.4.1.672.69.3.3.2.1.6.0 #FXE5000
+export SNMP_SSID_OID=.1.3.6.1.4.1.8691.15.35.1.11.17.1.6.1.1  #MOXA
 
-Step 2: Dump the vendor enterprise tree
-snmpwalk -On -v2c -c public <DEVICE_IP> 1.3.6.1.4.1 > /tmp/snmp_full.txt
+# BSSID (AP MAC)
+export SNMP_BSSID_OID=.1.3.6.1.4.1.672.69.3.3.2.1.8.0 #FXE5000
+export SNMP_BSSID_OID=.1.3.6.1.4.1.8691.15.35.1.11.17.1.3.1.1 #MOXA
 
-Step 3: Search for Wi-Fi-related fields
-RSSI-like values (typically -40 to -90 dBm):
-grep -E 'STRING: "-[4-9][0-9]"' /tmp/snmp_full.txt | head -n 20
-SSID candidates:
-grep -i ssid /tmp/snmp_full.txt
-BSSID / MAC address candidates:
-grep -E '([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}' /tmp/snmp_full.txt
-
-Step 4: Validate the candidate RSSI OID
-snmpget -v2c -c public <DEVICE_IP> <CANDIDATE_OID>
-Move the robot or change distance to the access point and confirm the value changes realistically. Only after validation should the OID be used as SNMP_RSSI_OID.
 
 Notes:
 - Some devices expose noise floor, SNR, or TX power instead of RSSI
