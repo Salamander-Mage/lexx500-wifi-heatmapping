@@ -5,9 +5,9 @@ PURPOSE
 - Produce Wi-Fi coverage heatmaps
 - Safe, read-only, stop anytime
 
-========================
+=====
 ROBOT MODE (RECOMMENDED)
-========================
+=====
 
 Uses:
 - Real antenna position
@@ -166,9 +166,9 @@ Prerequisites:
    xdg-open out/laptop_walk.html/report.html
  
 
-===========================
+=====
 HOW TO READ THE HTML REPORT
-===========================
+=====
 
 Open:
 output/<run_name>/report.html
@@ -310,9 +310,9 @@ NOT for:
 - Certification testing
 - Replacing RF surveys
 
-======================
+=====
 END REPORT GUIDE
-======================
+=====
 
 
 ----------------------
@@ -346,5 +346,5 @@ DO NOT DO
 - Do not install packages on robot
 - Do not run alongside mapping
 
-======================
+=====
 END
