@@ -5,36 +5,40 @@ PURPOSE
 - Produce Wi-Fi coverage heatmaps
 - Safe, read-only, stop anytime
 
-================================================================
+========================
 ROBOT MODE (RECOMMENDED)
-================================================================
+========================
 
 Uses:
 - Real antenna position
 - Real navigation path
 - Production-accurate results
 
-----------------------------------------------------------------
+-----------------------------------------
 Wi-Fi RSSI via SNMP (Hardware-Dependent)
-----------------------------------------------------------------
+-----------------------------------------
 IMPORTANT: SNMP OIDs for Wi-Fi metrics (RSSI, SSID, BSSID, noise, etc.) are vendor- and model-specific. Do NOT assume the same OIDs work across different access points or industrial routers.
 
 
 On a fresh clone export the following at the root directory of the app for applicable hardware:
 
 export SNMP_HOST= #use default moxa or fxe-5000 ip address
+
 export SNMP_COMMUNITY=public
 
 # RSSI (dBm)
 export SNMP_RSSI_OID=.1.3.6.1.4.1.672.69.3.3.2.1.9.0 #FXE5000
+
 export SNMP_RSSI_OID=.1.3.6.1.4.1.8691.15.35.1.11.17.1.4.1.1  #MOXA
 
 # SSID
 export SNMP_SSID_OID=.1.3.6.1.4.1.672.69.3.3.2.1.6.0 #FXE5000
+
 export SNMP_SSID_OID=.1.3.6.1.4.1.8691.15.35.1.11.17.1.6.1.1  #MOXA
 
 # BSSID (AP MAC)
 export SNMP_BSSID_OID=.1.3.6.1.4.1.672.69.3.3.2.1.8.0 #FXE5000
+
 export SNMP_BSSID_OID=.1.3.6.1.4.1.8691.15.35.1.11.17.1.3.1.1 #MOXA
 
 
@@ -43,9 +47,9 @@ Notes:
 - Using the wrong OID can silently produce misleading heatmaps
 - This tool assumes RSSI values are in dBm (negative integers)
 
-----------------------------------------------------------------
+------------------------------
 COLLECT DATA (ON ROBOT)
-----------------------------------------------------------------
+------------------------------
 At the directory root run the following:
 
 First make the script executable:
@@ -81,9 +85,9 @@ scp -r \
 
 xdg-open ~/Desktop/amr_run01.html/report.html
 
-----------------------------------------------------------------
+--------------------------------------
 LAPTOP WALK SURVEY (BASELINE / DEBUG)
-----------------------------------------------------------------
+--------------------------------------
 
 Uses:
 - Human walking path
@@ -162,18 +166,18 @@ Prerequisites:
    xdg-open out/laptop_walk.html/report.html
  
 
-================================================================
+===========================
 HOW TO READ THE HTML REPORT
-================================================================
+===========================
 
 Open:
 output/<run_name>/report.html
 
 The report contains multiple images. Each answers a different question.
 
-----------------------------------------------------------------
+-------------------------
 KEY VOCABULARY
-----------------------------------------------------------------
+-------------------------
 
 RSSI
 - Received Signal Strength Indicator
@@ -193,10 +197,12 @@ Bad Zone
 - Area where P10 RSSI is below threshold
 - Indicates high risk for packet loss
 
-----------------------------------------------------------------
+-----------------------------------------------
 IMAGE GUIDE
-----------------------------------------------------------------
+-----------------------------------------------
 
+
+----------------
 1) rssi_median.png
 ------------------
 Question it answers:
@@ -208,7 +214,7 @@ How to read:
 
 DO NOT use alone to judge reliability.
 
-----------------------------------------------------------------
+----------------
 2) rssi_p10.png
 ---------------
 Question it answers:
@@ -226,7 +232,7 @@ Target values:
 - Risky:       < -75 dBm
 - Severe:      < -80 dBm
 
-----------------------------------------------------------------
+----------------
 3) bad_zones.png
 ----------------
 Question it answers:
@@ -242,7 +248,7 @@ How to use:
   - Channel changes
   - Additional APs
 
-----------------------------------------------------------------
+-------------------
 4) path_overlay.png
 -------------------
 Question it answers:
@@ -254,8 +260,8 @@ What it shows:
   - Verifying coverage along routes
   - Explaining why issues only happen on certain paths
 
-----------------------------------------------------------------
-5) rssi_over_time.png
+---------------------
+1) rssi_over_time.png
 ---------------------
 Question it answers:
 - "Is the signal stable over time?"
@@ -268,8 +274,8 @@ Useful for:
 - Detecting transient issues
 - Correlating with logs
 
-----------------------------------------------------------------
-6) rssi_hist.png
+----------------
+1) rssi_hist.png
 ----------------
 Question it answers:
 - "How consistent is the signal overall?"
@@ -278,9 +284,9 @@ How to read:
 - Narrow peak = stable network
 - Wide spread = unreliable link
 
-----------------------------------------------------------------
+--------------------------
 FINAL INTERPRETATION RULES
-----------------------------------------------------------------
+--------------------------
 
 If Median is good but P10 is bad:
 - Network looks fine but is unreliable
@@ -291,9 +297,9 @@ If Bad Zones align with robot path:
 If Laptop looks good but Robot looks bad:
 - Antenna placement or shielding issue
 
-----------------------------------------------------------------
+---------------------
 WHAT THIS TOOL IS FOR
-----------------------------------------------------------------
+---------------------
 
 - Diagnosing Wi-Fi reliability issues
 - Comparing MOXA vs FXE-5000 performance
@@ -304,14 +310,14 @@ NOT for:
 - Certification testing
 - Replacing RF surveys
 
-================================================================
+======================
 END REPORT GUIDE
-================================================================
+======================
 
 
-----------------------------------------------------------------
+----------------------
 SANITY CHECKS
-----------------------------------------------------------------
+----------------------
 
 Robot pose:
 rostopic echo /amcl_pose
@@ -320,9 +326,9 @@ SNMP:
 snmpget -v2c -c public <MOXA_IP> sysDescr.0
 snmpget -v2c -c public <MOXA_IP> $SNMP_RSSI_OID
 
-----------------------------------------------------------------
+-----------------------
 COMMON ISSUES
-----------------------------------------------------------------
+-----------------------
 
 RSSI None:
 - Wrong OID
@@ -332,13 +338,13 @@ Pose frozen:
 - Robot not moving
 - Localization paused
 
-----------------------------------------------------------------
+----------------------
 DO NOT DO
-----------------------------------------------------------------
+----------------------
 
 - Do not modify ROS configs
 - Do not install packages on robot
 - Do not run alongside mapping
 
-================================================================
+======================
 END
