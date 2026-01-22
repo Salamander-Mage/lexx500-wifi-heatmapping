@@ -113,7 +113,9 @@ Prerequisites:
 
 1. Clone repo
      git clone <YOUR_GITHUB_REPO_URL>
+
      cd lexx500-wifi-heatmapping
+     
      mkdir -p data out (create output folders)
 
 2. Quick sanity check
