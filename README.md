@@ -59,7 +59,7 @@ chmod +x scripts/robot_collect_pose_snmp.sh
 ./scripts/robot_collect_pose_snmp.sh data/amr_run01.sqlite
 
 Output:
-data/klab_trial01.sqlite
+data/amr_run01.sqlite
 
 Stop scanning anytime with Ctrl+C.
 
@@ -115,7 +115,7 @@ Prerequisites:
      git clone <YOUR_GITHUB_REPO_URL>
 
      cd lexx500-wifi-heatmapping
-     
+
      mkdir -p data out (create output folders)
 
 2. Quick sanity check
