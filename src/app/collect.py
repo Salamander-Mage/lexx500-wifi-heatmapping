@@ -136,16 +136,16 @@ def snmp_read_wifi(
     return connected, rssi_dbm, ssid, bssid
 
 
-def _make_manual_pose_provider():
+def _make_manual_pose_provider(step_m: float, turn_deg: float):
     """
     Support either ManualPoseProvider or ClickMapPoseProvider depending on what exists.
     """
     from app import pose_sources
 
     if hasattr(pose_sources, "ManualPoseProvider"):
-        return pose_sources.ManualPoseProvider()
+        return pose_sources.ManualPoseProvider(step_m=step_m, turn_deg=turn_deg)
     if hasattr(pose_sources, "ClickMapPoseProvider"):
-        return pose_sources.ClickMapPoseProvider()
+        return pose_sources.ClickMapPoseProvider(step_m=step_m, turn_deg=turn_deg)
 
     raise RuntimeError(
         "No manual pose provider found. Expected ManualPoseProvider or ClickMapPoseProvider in app.pose_sources."
@@ -170,6 +170,8 @@ def main():
         action="store_true",
         help="Enable manual pose entry (used in laptop/manual workflows).",
     )
+    p.add_argument("--manual_step_m", type=float, default=0.5, help="Step size (meters) for manual forward/back shortcuts.")
+    p.add_argument("--manual_turn_deg", type=float, default=90.0, help="Turn angle (degrees) for manual left/right shortcuts.")
 
     # Wi-Fi selection (Linux interface) — used when SNMP is not enabled
     p.add_argument("--interface", default="auto", help="Linux Wi-Fi interface (auto, wlp9s0, etc).")
@@ -193,7 +195,7 @@ def main():
     # Pose provider selection
     # -------------------------
     if args.pose_source == "manual":
-        pose_provider = _make_manual_pose_provider()
+        pose_provider = _make_manual_pose_provider(step_m=args.manual_step_m, turn_deg=args.manual_turn_deg)
         if args.manual_pose and hasattr(pose_provider, "start"):
             pose_provider.start()
     else:

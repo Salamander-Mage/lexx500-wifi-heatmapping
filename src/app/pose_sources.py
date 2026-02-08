@@ -81,45 +81,79 @@ class ROS1PoseProvider(PoseProvider):
 
 class ManualPoseProvider(PoseProvider):
     """
-    Terminal-based manual pose entry.
+    Terminal-based manual pose entry with small-step shortcuts.
 
-    Workflow:
-      - First call prompts for x y yaw_deg (or x y yaw_rad)
-      - Next calls allow pressing Enter to reuse last pose
-      - You can also type: "x y yaw" again to update whenever you want
-
-    Accepts yaw in degrees by default unless you add suffix 'rad'.
-    Examples:
-      1.0 2.0 90
-      1.0 2.0 1.57 rad
+    Inputs:
+      - `x y yaw` (deg by default) or `x y yaw rad`
+      - ENTER: reuse last pose
+      - `f` / `forward`: move forward step_m along current yaw
+      - `b` / `back`: move backward step_m along current yaw
+      - `l` / `left`: rotate +turn_deg (no translation)
+      - `r` / `right`: rotate -turn_deg (no translation)
     """
 
-    def __init__(self, default_yaw_unit: str = "deg"):
+    def __init__(self, default_yaw_unit: str = "deg", step_m: float = 0.5, turn_deg: float = 90.0):
         self.default_yaw_unit = default_yaw_unit.lower().strip()
         if self.default_yaw_unit not in ("deg", "rad"):
             self.default_yaw_unit = "deg"
+        self.step_m = float(step_m)
+        self.turn_rad = math.radians(float(turn_deg))
         self._last: Optional[Pose2D] = None
 
     def _prompt(self) -> Pose2D:
         if self._last is None:
-            msg = "Enter pose: x y yaw (deg default)  e.g. 1.0 2.0 90\n> "
+            msg = (
+                "Enter pose: x y yaw (deg default), or shortcuts: f/b forward/back, l/r rotate, Enter=repeat\n"
+                "> "
+            )
         else:
             msg = (
-                "Enter pose: x y yaw (or press Enter to keep last: "
-                f"{self._last.x:.2f} {self._last.y:.2f} {math.degrees(self._last.yaw):.1f}deg)\n> "
+                "Enter pose (or Enter keep, f/b move, l/r rotate): "
+                f"{self._last.x:.2f} {self._last.y:.2f} {math.degrees(self._last.yaw):.1f}deg\n> "
             )
 
         try:
-            line = input(msg).strip()
+            line = input(msg).strip().lower()
         except EOFError:
             raise KeyboardInterrupt
 
+        # Empty -> reuse
         if line == "":
             if self._last is None:
                 print("No previous pose yet. Please enter x y yaw.", file=sys.stderr)
                 return self._prompt()
             return self._last
 
+        # Shortcuts require a previous pose
+        if line in ("f", "forward"):
+            if self._last is None:
+                print("Need an initial pose before using forward/back.", file=sys.stderr)
+                return self._prompt()
+            dx = self.step_m * math.cos(self._last.yaw)
+            dy = self.step_m * math.sin(self._last.yaw)
+            return Pose2D(self._last.x + dx, self._last.y + dy, self._last.yaw)
+
+        if line in ("b", "back", "backward"):
+            if self._last is None:
+                print("Need an initial pose before using forward/back.", file=sys.stderr)
+                return self._prompt()
+            dx = -self.step_m * math.cos(self._last.yaw)
+            dy = -self.step_m * math.sin(self._last.yaw)
+            return Pose2D(self._last.x + dx, self._last.y + dy, self._last.yaw)
+
+        if line in ("l", "left"):
+            if self._last is None:
+                print("Need an initial pose before rotating.", file=sys.stderr)
+                return self._prompt()
+            return Pose2D(self._last.x, self._last.y, _normalize_angle_rad(self._last.yaw + self.turn_rad))
+
+        if line in ("r", "right"):
+            if self._last is None:
+                print("Need an initial pose before rotating.", file=sys.stderr)
+                return self._prompt()
+            return Pose2D(self._last.x, self._last.y, _normalize_angle_rad(self._last.yaw - self.turn_rad))
+
+        # Full pose entry
         parts = line.split()
         if len(parts) < 3:
             print("Need at least: x y yaw", file=sys.stderr)
@@ -142,7 +176,6 @@ class ManualPoseProvider(PoseProvider):
         elif unit in ("rad", "radian", "radians"):
             yaw_rad = yaw
         else:
-            # Unknown suffix -> assume default
             yaw_rad = math.radians(yaw) if self.default_yaw_unit == "deg" else yaw
 
         return Pose2D(float(x), float(y), _normalize_angle_rad(float(yaw_rad)))

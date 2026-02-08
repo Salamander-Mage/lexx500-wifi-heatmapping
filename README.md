@@ -19,6 +19,8 @@ Collect Wi-Fi signal data along a path (robot or laptop), store it in SQLite/CSV
   - Locate values that change with signal (RSSI dBm, negative numbers) and strings for SSID/BSSID.
   - Verify with `snmpget -v2c -c <community> <host> <candidate_oid>` while moving the device; RSSI should vary.
 
+> AMR note: HybridAMR on the robot must match the version actually installed on your AMR; fielded units often lag the latest release. Mismatched images can miss deps or have ROS/network stack differences.
+
 1) Provide SNMP details (env file recommended):
   - Copy `snmp_oids.example.env` to `snmp_oids.env`, edit the IP/community, and choose the correct OID block.
   - Load it: `source snmp_oids.env`
@@ -49,8 +51,10 @@ Prereqs: Linux, `iw`, Python 3.
 ```
 PYTHONPATH="$PWD/src" python3 -m app.collect \
   --pose_source manual --manual_pose \
+  --manual_step_m 0.5 --manual_turn_deg 90 \
   --hz 1 --db data/laptop_walk.sqlite --commit_every 1
 ```
+Shortcuts during entry: Enter=reuse last, `f`/`b` move forward/back by step_m, `l`/`r` rotate by turn_deg.
 
 2) Render:
 ```
@@ -59,11 +63,18 @@ python3 src/render_from_sqlite.py --db data/laptop_walk.sqlite --out_dir output/
 Open `output/laptop_walk/report.html`.
 
 ## Simulation (no hardware)
-Generate synthetic samples and plot:
+Generate synthetic samples into SQLite and render with the main pipeline:
 ```
-python3 src/simulate_walk.py --out data/sim_samples.csv
-python3 src/render_heatmap.py --csv data/sim_samples.csv --out_dir output/sim
+python3 src/simulate_walk.py --db data/sim_samples.sqlite
+python3 src/render_from_sqlite.py --db data/sim_samples.sqlite --out_dir output/sim
 ```
+
+## Offline/air-gapped sites
+- If the AMR VLAN has no Internet (common for secured worksites), build an offline bundle on a connected machine:
+  - `./scripts/offline_pack.sh --image-tag lexx500-wifi:offline --deb snmp`
+  - Artifacts go to `offline_bundle/`: Docker image tar, wheelhouse, SNMP debs, and repo archive.
+- On site: `docker load -i offline_bundle/lexx500-wifi-offline.tar` (or `pip install --no-index --find-links offline_bundle/wheelhouse -r requirements.txt` if running baremetal) and `sudo dpkg -i offline_bundle/debs/snmp*.deb` for SNMP tools.
+- Container helper: `scripts/run_noetic_container.sh` mounts the repo and uses the prebuilt image (includes numpy/pandas/matplotlib/pillow + SNMP tools baked into Dockerfile.noetic).
 
 ## Offline Bundle (no Internet on site)
 Build offline assets on a connected machine:

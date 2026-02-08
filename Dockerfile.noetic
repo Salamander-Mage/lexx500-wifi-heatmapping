@@ -1,8 +1,16 @@
 FROM ros:noetic-ros-base
 
+# Base tooling for Wi-Fi and SNMP reads
 RUN apt-get update && apt-get install -y \
     python3-pip python3-venv python3-dev \
-    iproute2 iw wireless-tools net-tools iputils-ping \
+    iproute2 iw wireless-tools net-tools iputils-ping snmp \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /workspace
+
+# Minimal pinned Python deps (compatible with Python 3.8 in Noetic)
+RUN pip3 install --no-cache-dir \
+    numpy==1.24.4 \
+    pandas==2.0.3 \
+    matplotlib==3.7.5 \
+    pillow

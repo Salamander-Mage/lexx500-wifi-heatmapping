@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PROJECT_DIR="$HOME/Desktop/Heatmapping Tool Project"
+PROJECT_DIR="/home/salamander/Desktop/lexx500-wifi-heatmapping"
 
 docker run -it --rm \
   --net=host \
