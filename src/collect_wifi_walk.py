@@ -60,4 +60,5 @@ def main():
 
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
-    pd.Dat
+    pd.DataFrame(rows).to_csv(out, index=False)
+    print(f"✅ wrote {len(rows)} samples -> {out}")
