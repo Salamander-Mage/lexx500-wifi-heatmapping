@@ -23,7 +23,7 @@ python3 src/app/collect.py \
 
 python3 src/render_from_sqlite.py --db data/amr_run01.sqlite --out_dir output/amr_run01
 ```
-Notes: ROS1 env must provide `rospy` and `tf`; our Docker image includes `ros-noetic-tf`.
+Notes: ROS1 env must provide `rospy` and `tf`; our Docker image includes `ros-noetic-tf`. Viewing the report: open `output/amr_run01/report.html` on the AMR (if GUI) or copy `output/amr_run01/` to a laptop and open there.
 
 ### B) Laptop/manual (keyboard pose)
 ```
