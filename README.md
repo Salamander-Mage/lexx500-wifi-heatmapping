@@ -1,119 +1,97 @@
-# Lexx500 Wi-Fi Heatmapping
+# Lexx500 Wi-Fi Heatmapping — Field Engineer Quick Guide
 
-Collect Wi-Fi signal data along a path (robot or laptop), store it in SQLite/CSV, and render heatmaps plus an HTML report that highlights weak zones, roam/disconnect events, and basic stats.
+Collect Wi-Fi signal data (ROS1 pose + SNMP on AMR, or manual laptop walk), store it in SQLite, and render heatmaps/HTML reports. Copy/paste the flow that matches your situation.
 
-## What’s Included
-- Data collection (ROS1 pose + SNMP Wi-Fi on AMR, or manual laptop walk)
-- Simulation generator (synthetic walk + RSSI model)
-- Rendering to PNG heatmaps and HTML report
-- Offline pack script for air-gapped sites
+## SNMP OID examples (pick the right ones for your device)
+- FXE5000: RSSI `.1.3.6.1.4.1.672.69.3.3.2.1.9.0`, SSID `.1.3.6.1.4.1.672.69.3.3.2.1.6.0`, BSSID `.1.3.6.1.4.1.672.69.3.3.2.1.8.0`
+- MOXA:    RSSI `.1.3.6.1.4.1.8691.15.35.1.11.17.1.4.1.1`, SSID `.1.3.6.1.4.1.8691.15.35.1.11.17.1.6.1.1`, BSSID `.1.3.6.1.4.1.8691.15.35.1.11.17.1.3.1.1`
+- Unknown? Discover once per site: `snmpwalk -v2c -c <comm> <host> 1.3.6.1.4.1 | head -n 200` and test candidates with `snmpget` while moving (RSSI should vary).
 
-## Quick Start (Robot, ROS1 + SNMP)
-0) Prereq: find the correct OIDs for your hardware/site (do this once):
-  - Check vendor docs for RSSI/SSID/BSSID OIDs (preferred).
-  - If unknown, run a targeted walk (from a laptop on the same VLAN):
-    - `snmpwalk -v2c -c <community> <host> 1.3.6.1.4.1 | head -n 200` (scan the enterprise tree).
-    - Or narrower guesses (replace OIDs with likely enterprise roots):
-     - FXE5000 root: `snmpwalk -v2c -c <community> <host> 1.3.6.1.4.1.672`
-     - MOXA root:    `snmpwalk -v2c -c <community> <host> 1.3.6.1.4.1.8691`
-  - Locate values that change with signal (RSSI dBm, negative numbers) and strings for SSID/BSSID.
-  - Verify with `snmpget -v2c -c <community> <host> <candidate_oid>` while moving the device; RSSI should vary.
+## Quick Start Recipes (copy/paste)
 
-> AMR note: HybridAMR on the robot must match the version actually installed on your AMR; fielded units often lag the latest release. Mismatched images can miss deps or have ROS/network stack differences.
-
-1) Provide SNMP details (env file recommended):
-  - Copy `snmp_oids.example.env` to `snmp_oids.env`, edit the IP/community, and choose the correct OID block.
-  - Load it: `source snmp_oids.env`
-  Env vars needed: SNMP_HOST, SNMP_COMMUNITY (default public), SNMP_RSSI_OID (required), optional SNMP_SSID_OID, SNMP_BSSID_OID.
-
-2) Collect (uses ROS1 `/amcl_pose` and SNMP Wi-Fi):
+### A) AMR with ROS1 + SNMP (online or air-gapped)
 ```
-PYTHONPATH="$PWD/src" python3 -m app.collect \
+source /opt/ros/noetic/setup.bash            # if available on host; skip inside our Docker image
+export PYTHONPATH="$PWD/src:$PYTHONPATH"
+python3 src/app/collect.py \
   --pose_source ros1 --pose_topic /amcl_pose \
   --snmp_host "$SNMP_HOST" --snmp_community "${SNMP_COMMUNITY:-public}" \
   --snmp_rssi_oid "$SNMP_RSSI_OID" \
   --snmp_ssid_oid "${SNMP_SSID_OID:-}" \
   --snmp_bssid_oid "${SNMP_BSSID_OID:-}" \
   --db data/amr_run01.sqlite
-```
-Stop with Ctrl+C. Samples land in `data/amr_run01.sqlite`.
 
-3) Render report:
-```
 python3 src/render_from_sqlite.py --db data/amr_run01.sqlite --out_dir output/amr_run01
 ```
-Open `output/amr_run01/report.html`.
+Notes: ROS1 env must provide `rospy` and `tf`; our Docker image includes `ros-noetic-tf`.
 
-## Quick Start (Laptop Walk, Manual Pose)
-Prereqs: Linux, `iw`, Python 3.
-
-1) Collect manual walk (prompts for x y yaw):
+### B) Laptop/manual (keyboard pose)
 ```
-PYTHONPATH="$PWD/src" python3 -m app.collect \
-  --pose_source manual --manual_pose \
+export PYTHONPATH="$PWD/src:$PYTHONPATH"
+python3 src/app/collect.py \
+  --pose_source manual_shortcuts \
   --manual_step_m 0.5 --manual_turn_deg 90 \
   --hz 1 --db data/laptop_walk.sqlite --commit_every 1
-```
-Shortcuts during entry: Enter=reuse last, `f`/`b` move forward/back by step_m, `l`/`r` rotate by turn_deg.
 
-2) Render:
-```
 python3 src/render_from_sqlite.py --db data/laptop_walk.sqlite --out_dir output/laptop_walk
 ```
-Open `output/laptop_walk/report.html`.
+Shortcuts: arrow/WASD/QE/RF for movement; Enter reuses last pose.
 
-## Simulation (no hardware)
-Generate synthetic samples into SQLite and render with the main pipeline:
+### C) Simulation sanity check
 ```
-python3 src/simulate_walk.py --db data/sim_samples.sqlite
+python3 src/simulate_walk.py --db data/sim_samples.sqlite --width_m 30 --height_m 20 --step_m 0.5 --hz 2 --seed 7
 python3 src/render_from_sqlite.py --db data/sim_samples.sqlite --out_dir output/sim
 ```
 
-## Offline/air-gapped sites
-- If the AMR VLAN has no Internet (common for secured worksites), build an offline bundle on a connected machine:
-  - `./scripts/offline_pack.sh --image-tag lexx500-wifi:offline --deb snmp`
-  - Artifacts go to `offline_bundle/`: Docker image tar, wheelhouse, SNMP debs, and repo archive.
-- On site: `docker load -i offline_bundle/lexx500-wifi-offline.tar` (or `pip install --no-index --find-links offline_bundle/wheelhouse -r requirements.txt` if running baremetal) and `sudo dpkg -i offline_bundle/debs/snmp*.deb` for SNMP tools.
-- Container helper: `scripts/run_noetic_container.sh` mounts the repo and uses the prebuilt image (includes numpy/pandas/matplotlib/pillow + SNMP tools baked into Dockerfile.noetic).
-
-## Offline Bundle (no Internet on site)
-Build offline assets on a connected machine:
+### D) Air-gapped with Docker (recommended)
+On an Internet host:
 ```
 ./scripts/offline_pack.sh --image-tag lexx500-wifi:offline --deb snmp
 ```
-Artifacts: `offline_bundle/` containing wheelhouse, SNMP debs, Docker image tar, and repo archive.
+Carry `offline_bundle/` to site, then on the AMR:
+```
+docker load -i offline_bundle/lexx500-wifi-offline.tar
+docker run -it --rm --net=host --privileged \
+  -v "$PWD:/workspace" -w /workspace \
+  lexx500-wifi:offline bash
+# inside container
+source /opt/ros/noetic/setup.bash
+export PYTHONPATH=/workspace/src:$PYTHONPATH
+python3 src/app/collect.py ...same as flow A...
+```
 
-Use on site:
-- If Docker allowed: `docker load -i offline_bundle/lexx500-wifi-offline.tar`
-- Without Docker: `pip install --no-index --find-links offline_bundle/wheelhouse -r requirements.txt`
-- Install SNMP tools: `sudo dpkg -i offline_bundle/debs/snmp*.deb`
+### E) Air-gapped without Docker (bare metal)
+On an Internet host:
+```
+./scripts/offline_pack.sh --image-tag lexx500-wifi:offline --deb snmp
+```
+On the AMR:
+```
+sudo dpkg -i offline_bundle/debs/snmp*.deb
+python3 -m venv .venv && source .venv/bin/activate
+pip install --no-index --find-links offline_bundle/wheelhouse -r requirements.txt
+export PYTHONPATH="$PWD/src:$PYTHONPATH"
+python3 src/app/collect.py ...same as flow A or B...
+```
 
 ## Minimal Command Cheat Sheet
-- ROS1 + SNMP: see Quick Start (Robot)
-- Manual laptop: see Quick Start (Laptop Walk)
+- ROS1 + SNMP: use flow A above.
+- Manual keyboard: use flow B above.
 - Export DB to CSV: `python3 src/export_sqlite_to_csv.py --db data/run.sqlite --out data/run.csv`
 - Render existing DB: `python3 src/render_from_sqlite.py --db data/run.sqlite --out_dir output/run`
 
 ## Report Reading (fast)
 - `rssi_median.png`: typical signal per cell (median)
-- `rssi_p10.png`: worst-tendency per cell (10th percentile) — most important
+- `rssi_p10.png`: worst-tendency per cell (10th percentile)
 - `bad_zones.png`: cells where P10 < threshold (default -75 dBm)
 - `path_overlay.png`: path with roam/disconnect markers
 - `rssi_over_time.png`: stability over time
 - `rssi_hist.png`: distribution spread
 
-Rules of thumb:
-- Aim for P10 ≥ -75 dBm on routes; < -80 dBm is risky
-- If median is fine but P10 is poor, expect intermittents
-- Align bad zones with robot routes to prioritize fixes
+Rules of thumb: aim for P10 ≥ -75 dBm on routes; < -80 dBm is risky.
 
 ## Troubleshooting
-- RSSI is None: wrong OID or SNMP disabled
-- No pose in ROS mode: check `/amcl_pose` and ROS networking; `pose_provider.has_pose()` must become true
-- Laptop mode no Wi-Fi: ensure `iw` interface auto-detected or pass `--interface wlpXsY`
-- Probes: `ping` parsing is Linux-centric; on macOS/BusyBox results may be missing
-
-## Notes
-- Wi-Fi OIDs are vendor-specific; validate once per site/hardware.
-- Values assumed to be RSSI in dBm (negative integers).
-- Stop collection safely with Ctrl+C; commits are periodic.
+- RSSI is None: wrong OID or SNMP disabled.
+- Missing ROS deps: `import rospy`/`import tf` fails → use the Docker image or install `ros-noetic-tf` and source `/opt/ros/noetic/setup.bash`.
+- Laptop mode can’t find Wi-Fi: pass `--interface wlpXsY`.
+- Stop safely with Ctrl+C; commits are periodic.
