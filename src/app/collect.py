@@ -163,7 +163,7 @@ def main():
     p.add_argument("--commit_every", type=int, default=10)
 
     # Pose selection
-    p.add_argument("--pose_source", default="manual", choices=["manual", "ros1"])
+    p.add_argument("--pose_source", default="manual", choices=["manual", "manual_shortcuts", "ros1"])
     p.add_argument("--pose_topic", default="/amcl_pose")
     p.add_argument(
         "--manual_pose",
@@ -194,7 +194,7 @@ def main():
     # -------------------------
     # Pose provider selection
     # -------------------------
-    if args.pose_source == "manual":
+    if args.pose_source in ("manual", "manual_shortcuts"):
         pose_provider = _make_manual_pose_provider(step_m=args.manual_step_m, turn_deg=args.manual_turn_deg)
         if args.manual_pose and hasattr(pose_provider, "start"):
             pose_provider.start()

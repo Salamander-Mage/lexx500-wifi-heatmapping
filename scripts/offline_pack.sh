@@ -70,6 +70,8 @@ fi
 if [[ $DOWNLOAD_DEBS -eq 1 ]]; then
   if command -v apt-get >/dev/null 2>&1 && command -v apt-cache >/dev/null 2>&1; then
     mkdir -p "$DEB_DIR"
+    log "Refreshing apt metadata before downloading debs ..."
+    sudo apt-get update -y >/dev/null 2>&1 || log "apt-get update failed (continuing to attempt downloads)."
     for pkg in "${DEB_PKGS[@]}"; do
       log "Downloading .deb for $pkg ..."
       (cd "$DEB_DIR" && apt-get download "$pkg") || die "Failed to download $pkg"
