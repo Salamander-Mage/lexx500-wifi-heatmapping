@@ -37,30 +37,11 @@ python3 src/render_from_sqlite.py --db data/laptop_walk.sqlite --out_dir output/
 ```
 Shortcuts: arrow/WASD/QE/RF for movement; Enter reuses last pose.
 
-<<<<<<< HEAD
 ### C) Simulation sanity check
 ```
 python3 src/simulate_walk.py --db data/sim_samples.sqlite --width_m 30 --height_m 20 --step_m 0.5 --hz 2 --seed 7
-=======
-## Simulation (no hardware)
-Use this to sanity-check the render pipeline without a robot or Wi‑Fi:
-
-What it does:
-- Generates a lawnmower path over a rectangular area (default 30 m × 20 m, 0.5 m step).
-- Synthesizes RSSI using a simple path-loss model against two virtual APs, adds Gaussian noise.
-- Logs into SQLite with the same schema as real runs (roam markers included when BSSID changes).
-
-Run and render:
-```
-python3 src/simulate_walk.py --db data/sim_samples.sqlite \
-  --width_m 30 --height_m 20 --step_m 0.5 --hz 2 --seed 7
-
->>>>>>> f81c974 (Clarify simulation instructions)
 python3 src/render_from_sqlite.py --db data/sim_samples.sqlite --out_dir output/sim
 ```
-Notes:
-- Tweak APs/area by editing `src/simulate_walk.py` (AP coords/tx power/path-loss exponent/noise).
-- Outputs land in `data/sim_samples.sqlite` and `output/sim/report.html`.
 
 ### D) Air-gapped with Docker (recommended)
 On an Internet host:
